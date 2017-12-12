@@ -104,6 +104,13 @@ class PipelineConfiguration(object):
             "published_file_entity_type",
             "PublishedFile"
         )
+
+        # Enable the use of env variables for project and pipeline configuration settings
+        self._project_name = os.path.expandvars(self._project_name)
+        self._pc_name = os.path.expandvars(self._pc_name)
+        self._project_id = int(os.path.expandvars(self._project_id)) if isinstance(self._project_id, str) else self._project_id
+        self._pc_id = int(os.path.expandvars(self._pc_id)) if isinstance(self._pc_id, str) else self._pc_id
+
         self._use_shotgun_path_cache = pipeline_config_metadata.get(
             "use_shotgun_path_cache",
             False
@@ -609,11 +616,18 @@ class PipelineConfiguration(object):
         
         :returns: str to local path on disk
         """
-        if len(self.get_data_roots()) == 0:
+        data_roots = self.get_data_roots()
+        roots_count = len(data_roots)
+        if roots_count == 0:
             raise TankError("Your current pipeline configuration does not have any project data "
                             "storages defined and therefore does not have a primary project data root!")
-         
-        return self.get_data_roots().get(constants.PRIMARY_STORAGE_NAME)
+        elif roots_count == 1:
+            # If we have a single root, it is the primary root.
+            return data_roots[data_roots.keys()[0]]
+        else:
+            # If we have multiple roots, it is required that one of them is named
+            # "primary".
+            return data_roots.get(constants.PRIMARY_STORAGE_NAME)
 
     ########################################################################################
     # installation payload (core/apps/engines) disk locations

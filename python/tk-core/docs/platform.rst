@@ -76,7 +76,7 @@ The typical things an engine needs to handle are:
 
 - Logging methods are typically overridden to write to the application log.
 
-- UI methods are typically overridden to ensure seamless integration of windows launched by Toolkit apps
+- UI methods are typically overridden to ensure seamless integration of Windows launched by Toolkit apps
   and the underlying host application window management setup. Engines are launched via the
   :meth:`stgk.platform.start_engine()` command. This command will read the configuration files,
   launch the engines, load all apps etc. The goal with the engine is that once it has launched,
@@ -565,7 +565,7 @@ Use this when your app requires an external file that is part of the configurati
 Typically, this settings type is used when you want to allow for a user to associate
 files with a configuration. These files can be icons or other resource files that
 should be part of the configuration. These paths should always be defined without an initial
-slash and using slashes as its path separator. Sgtk will translate it into a valid windows path::
+slash and using slashes as its path separator. Sgtk will translate it into a valid Windows path::
 
 
     output_icon:
@@ -1213,6 +1213,16 @@ especially when the contained widget is quite small. To hide the title bar, just
 
         def __init__(self):
             ...
+
+Styling your Toolkit App
+========================================
+
+If a `standard Qt style sheet <http://doc.qt.io/qt-5/stylesheet.html>`_  ``style.qss`` file resides in the root of your app, Toolkit will automatically load it and apply it to your app.
+
+When developping your app, you can enable interactive styling by setting the ``SHOTGUN_QSS_FILE_WATCHER`` environment variable to ``1``. Toolkit will automatically reload and re-apply the styling when the file is changed.
+
+.. note:: The style sheet file watching can be helpful when developping apps, but shouldn't be used in production.
+
 
 Software launching
 ==================

@@ -22,9 +22,9 @@ from .ui import resources_rc # noqa
 from .ui import login_dialog
 from . import session_cache
 from ..util.shotgun import connection
-from shotgun_shared import Saml2Sso, is_sso_enabled_on_site
+from .shotgun_shared import Saml2Sso, is_sso_enabled_on_site, Saml2SsoMissingQtModuleError
 from .errors import AuthenticationError
-from .ui.qt_abstraction import QtGui, QtCore
+from .ui.qt_abstraction import QtGui, QtCore, QtNetwork, QtWebKit
 from tank_vendor.shotgun_api3 import MissingTwoFactorAuthenticationFault
 from .. import LogManager
 
@@ -37,6 +37,50 @@ PRODUCT_IDENTIFIER = "toolkit"
 # a Shotgun site URL, we check for SSO support (and update the GUI) only after
 # the user has stopped for longer than the delay (in ms).
 USER_INPUT_DELAY_BEFORE_SSO_CHECK = 300
+
+# Let's put at 5 seconds the maximum time we might wait for a SSO check thread.
+THREAD_WAIT_TIMEOUT_MS = 5000
+
+
+class QuerySiteAndUpdateUITask(QtCore.QThread):
+    """
+    This class uses a different thread to query if SSO is enabled or not.
+
+    We use a different thread due to the time the call can take, and
+    to avoid blocking the main GUI thread.
+    """
+
+    def __init__(self, parent):
+        """
+        Constructor.
+        """
+        QtCore.QThread.__init__(self, parent)
+        self._url_to_test = ""
+        self._sso_enabled = False
+
+    @property
+    def sso_enabled(self):
+        """Bool R/W property."""
+        return self._sso_enabled
+
+    @sso_enabled.setter
+    def sso_enabled(self, value):
+        self._sso_enabled = value
+
+    @property
+    def url_to_test(self):
+        """String R/W property."""
+        return self._url_to_test
+
+    @url_to_test.setter
+    def url_to_test(self, value):
+        self._url_to_test = value
+
+    def run(self):
+        """
+        Runs the thread.
+        """
+        self.sso_enabled = is_sso_enabled_on_site(self.url_to_test)
 
 
 class LoginDialog(QtGui.QDialog):
@@ -62,7 +106,17 @@ class LoginDialog(QtGui.QDialog):
         """
         QtGui.QDialog.__init__(self, parent)
 
-        self._saml2_sso = Saml2Sso("SSO Login")
+        qt_modules = {
+            "QtCore": QtCore,
+            "QtGui": QtGui,
+            "QtNetwork": QtNetwork,
+            "QtWebKit": QtWebKit,
+        }
+        try:
+            self._saml2_sso = Saml2Sso("SSO Login", qt_modules=qt_modules)
+        except Saml2SsoMissingQtModuleError as e:
+            logger.error("SSO login not supported due to missing Qt module: %s" % e)
+            self._saml2_sso = None
 
         hostname = hostname or ""
         login = login or ""
@@ -76,7 +130,7 @@ class LoginDialog(QtGui.QDialog):
         # typed, but instead wait for a period of inactivity from the user.
         self._url_changed_timer = QtCore.QTimer(self)
         self._url_changed_timer.setSingleShot(True)
-        self._url_changed_timer.timeout.connect(self._update_ui_according_to_sso)
+        self._url_changed_timer.timeout.connect(self._update_ui_according_to_sso_support)
 
         # setup the gui
         self.ui = login_dialog.Ui_LoginDialog()
@@ -111,7 +165,7 @@ class LoginDialog(QtGui.QDialog):
             self._set_login_message("Please enter your credentials.")
 
         # Set the focus appropriately on the topmost line edit that is empty.
-        if self.ui.site.text():
+        if len(self.ui.site.text()) > 0:
             if self.ui.login.text():
                 self.ui.password.setFocus(QtCore.Qt.OtherFocusReason)
             else:
@@ -138,16 +192,29 @@ class LoginDialog(QtGui.QDialog):
         self.ui._2fa_code.editingFinished.connect(self._strip_whitespaces)
         self.ui.backup_code.editingFinished.connect(self._strip_whitespaces)
 
-        self._update_ui_according_to_sso()
+        self._query_task = QuerySiteAndUpdateUITask(self)
+        self._query_task.finished.connect(self._toggle_sso)
+        self._update_ui_according_to_sso_support()
 
-    def _update_ui_according_to_sso(self):
+        # We want to wait until we know if the site uses SSO or not, to avoid
+        # flickering GUI.
+        if not self._query_task.wait(THREAD_WAIT_TIMEOUT_MS):
+            logger.warning("Timed out awaiting check for SSO support on the site: %s" % self._get_site())
+
+    def _get_site(self):
+        """
+        Get a sanitized and properly formatted URL for the Shotgun site.
+        """
+        return connection.sanitize_url(self.ui.site.text().encode("utf-8").strip())
+
+    def _update_ui_according_to_sso_support(self):
         """
         Updates the GUI if SSO is supported or not, hiding or showing the username/password fields.
         """
-        url_to_test = self.ui.site.text().encode("utf-8").strip()
-        sso_enabled = is_sso_enabled_on_site(url_to_test)
-        if self._use_sso != sso_enabled:
-            self._toggle_sso()
+        # Only update the GUI if we were able to initialize the sam2sso module.
+        if self._saml2_sso:
+            self._query_task.url_to_test = self._get_site()
+            self._query_task.start()
 
     def _site_url_changed(self, text):
         """
@@ -167,7 +234,7 @@ class LoginDialog(QtGui.QDialog):
         """
         # Don't use the URL that is set in the link, but the URL set in the
         # text box.
-        site = connection.sanitize_url(self.ui.site.text())
+        site = self._get_site()
 
         # Give visual feedback that we are patching the URL before invoking
         # the desktop services.
@@ -184,13 +251,18 @@ class LoginDialog(QtGui.QDialog):
         """
         Sets up the dialog GUI according to the use of SSO or not.
         """
-        self._use_sso = not self._use_sso
-        if self._use_sso:
-            self.ui.message.setText("Sign in using your Single Sign-On (SSO) Account.")
-        else:
-            self.ui.message.setText("Please enter your credentials.")
-        self.ui.login.setVisible(not self._use_sso)
-        self.ui.password.setVisible(not self._use_sso)
+        # We only update the GUI if there was a change between to mode we
+        # are showing and what was detected on the potential target site.
+        if self._use_sso != self._query_task.sso_enabled:
+            self._use_sso = not self._use_sso
+            if self._use_sso:
+                self.ui.message.setText("Sign in using your Single Sign-On (SSO) Account.")
+                self.ui.site.setFocus(QtCore.Qt.OtherFocusReason)
+            else:
+                self.ui.message.setText("Please enter your credentials.")
+
+            self.ui.login.setVisible(not self._use_sso)
+            self.ui.password.setVisible(not self._use_sso)
 
     def _current_page_changed(self, index):
         """
@@ -241,9 +313,11 @@ class LoginDialog(QtGui.QDialog):
         :returns: A tuple of (hostname, username and session token) string if the user authenticated
                   None if the user cancelled.
         """
-        if self._cookies:
+        site = self._get_site()
+
+        if self._cookies and self._saml2_sso:
             res = self._saml2_sso.on_sso_login_attempt({
-                "host": self.ui.site.text().encode("utf-8"),
+                "host": site,
                 "cookies": self._cookies,
                 "product": PRODUCT_IDENTIFIER
             }, use_watchdog=True)
@@ -256,9 +330,9 @@ class LoginDialog(QtGui.QDialog):
         res = self.exec_()
 
         if res == QtGui.QDialog.Accepted:
-            if self._cookies:
+            if self._cookies and self._saml2_sso:
                 return self._saml2_sso.get_session_data()
-            return (self.ui.site.text().encode("utf-8"),
+            return (site,
                     self.ui.login.text().encode("utf-8"),
                     self._new_session_token,
                     None)
@@ -278,19 +352,25 @@ class LoginDialog(QtGui.QDialog):
         """
         Validate the values, accepting if login is successful and display an error message if not.
         """
+        # Wait for any ongoing SSO check thread.
+        QtGui.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        if not self._query_task.wait(THREAD_WAIT_TIMEOUT_MS):
+            logger.warning("Timed out awaiting check for SSO support on the site: %s" % self._get_site())
+        QtGui.QApplication.restoreOverrideCursor()
+
         # pull values from the gui
-        site = self.ui.site.text().strip()
+        site = self._get_site()
         login = self.ui.login.text().strip()
         password = self.ui.password.text()
 
-        if len(site) == 0:
+        if site == "https://" or site == "http://":
             self._set_error_message(self.ui.message, "Please enter the address of the site to connect to.")
             self.ui.site.setFocus(QtCore.Qt.OtherFocusReason)
             return
 
-        site = connection.sanitize_url(site)
-
-        # Cleanup the URL.
+        # Cleanup the URL and update the GUI.
+        if self._use_sso and site.startswith("http://"):
+            site = "https" + site[4:]
         self.ui.site.setText(site)
 
         if not self._use_sso:
@@ -326,7 +406,7 @@ class LoginDialog(QtGui.QDialog):
         """
         success = False
         try:
-            if self._use_sso:
+            if self._use_sso and self._saml2_sso:
                 res = self._saml2_sso.on_sso_login_attempt({
                     "host": site,
                     "cookies": self._cookies,
@@ -387,7 +467,7 @@ class LoginDialog(QtGui.QDialog):
             self._set_error_message(error_label, "Please enter your code.")
             return
 
-        site = self.ui.site.text().strip()
+        site = self._get_site()
         login = self.ui.login.text()
         password = self.ui.password.text()
 
