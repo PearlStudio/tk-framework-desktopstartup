@@ -41,7 +41,27 @@ class IncompleteCredentials(ShotgunAuthenticationError):
         )
 
 
-class ConsoleLoginWithSSONotSupportedError(ShotgunAuthenticationError):
+class AuthenticationCancelled(ShotgunAuthenticationError):
+    """
+    Thrown when the user cancels authentication or session renewal.
+    """
+
+    def __init__(self):
+        """
+        Constructor.
+        """
+        ShotgunAuthenticationError.__init__(
+            self, "Authentication was cancelled by the user."
+        )
+
+
+class AuthenticationSSOError(ShotgunAuthenticationError):
+    """
+    Base class for all SSO-related exceptions coming out from this module.
+    """
+
+
+class ConsoleLoginWithSSONotSupportedError(AuthenticationSSOError):
     """
     Thrown when attempting to use Username/Password pair to login onto
     a SSO-enabled site.
@@ -53,15 +73,4 @@ class ConsoleLoginWithSSONotSupportedError(ShotgunAuthenticationError):
         """
         ShotgunAuthenticationError.__init__(
             self, "Authentication using username/password is not allowed on the console for %s, an SSO-enabled site." % url
-        )
-
-
-class AuthenticationCancelled(ShotgunAuthenticationError):
-    """
-    Thrown when the user cancels authentication or session renewal.
-    """
-
-    def __init__(self):
-        ShotgunAuthenticationError.__init__(
-            self, "Authentication was cancelled by the user."
         )

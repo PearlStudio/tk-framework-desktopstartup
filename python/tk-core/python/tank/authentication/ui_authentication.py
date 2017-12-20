@@ -31,17 +31,17 @@ class UiAuthenticationHandler(object):
     directly and be used through the authenticate and renew_session methods.
     """
 
-    def __init__(self, is_session_renewal, fixed_host=False, cookies=None):
+    def __init__(self, is_session_renewal, fixed_host=False, session_metadata=None):
         """
         Creates the UiAuthenticationHandler object.
         :param is_session_renewal: Boolean indicating if we are renewing a session. True if we are, False otherwise.
         :param fixed_host: Indicate if the user can select a different host for connecting to.
-        :param cookies: String of raw cookies
+        :param session_metadata: Data required when SSO is used. This is an obscure blob of data.
         """
         self._is_session_renewal = is_session_renewal
         self._gui_launcher = invoker.create()
         self._fixed_host = fixed_host
-        self._cookies = cookies
+        self._session_metadata = session_metadata
 
     def authenticate(self, hostname, login, http_proxy):
         """
@@ -52,7 +52,6 @@ class UiAuthenticationHandler(object):
         :param http_proxy: Proxy server to use when validating credentials. Can be None.
         :returns: A tuple of (hostname, login, session_token)
         """
-
         # deferred import because the login dialog contains QT references.
         from . import login_dialog
 
@@ -68,7 +67,7 @@ class UiAuthenticationHandler(object):
                 login=login,
                 http_proxy=http_proxy,
                 fixed_host=self._fixed_host,
-                cookies=self._cookies
+                session_metadata=self._session_metadata
             )
             return dlg.result()
 

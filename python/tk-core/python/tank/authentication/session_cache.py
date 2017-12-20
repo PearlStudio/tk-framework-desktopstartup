@@ -37,7 +37,7 @@ _CURRENT_HOST = "current_host"
 _CURRENT_USER = "current_user"
 _USERS = "users"
 _LOGIN = "login"
-_COOKIES = "cookies"
+_SESSION_METADATA = "session_metadata"
 _SESSION_TOKEN = "session_token"
 _SESSION_CACHE_FILE_NAME = "authentication.yml"
 
@@ -223,7 +223,7 @@ def _try_load_global_authentication_file(file_path):
     return content
 
 
-def _insert_or_update_user(users_file, login, session_token, cookies):
+def _insert_or_update_user(users_file, login, session_token, session_metadata):
     """
     Finds or updates an entry in the users file with the given login and
     session token.
@@ -231,7 +231,7 @@ def _insert_or_update_user(users_file, login, session_token, cookies):
     :param users_file: Users dictionary to update.
     :param login: Login of the user to update.
     :param session_token: Session token of the user to update.
-    :param cookies: Session cookies of the user to update.
+    :param session_metadata: Information needed for when SSO is used. This is an obscure blob of data.
 
     :returns: True is the users dictionary has been updated, False otherwise.
     """
@@ -244,8 +244,8 @@ def _insert_or_update_user(users_file, login, session_token, cookies):
             if user[_SESSION_TOKEN] != session_token:
                 user[_SESSION_TOKEN] = session_token
                 result = True
-            if user.get(_COOKIES) and user[_COOKIES] != cookies:
-                user[_COOKIES] = cookies
+            if user.get(_SESSION_METADATA) and user[_SESSION_METADATA] != session_metadata:
+                user[_SESSION_METADATA] = session_metadata
                 result = True
             return result
     # This is a new user, add it to the list.
@@ -253,10 +253,10 @@ def _insert_or_update_user(users_file, login, session_token, cookies):
         _LOGIN: login,
         _SESSION_TOKEN: session_token
     }
-    # We purposely do not save unset cookies to avoid de-serialization issues
+    # We purposely do not save unset session_metadata to avoid de-serialization issues
     # when the data is read by older versions of the tk-core.
-    if cookies is not None:
-        user[_COOKIES] = cookies
+    if session_metadata is not None:
+        user[_SESSION_METADATA] = session_metadata
     users_file[_USERS].append(user)
     return True
 
@@ -324,11 +324,11 @@ def get_session_data(base_url, login):
                     _LOGIN: user[_LOGIN].strip(),
                     _SESSION_TOKEN: user[_SESSION_TOKEN]
                 }
-                # We want to keep cookies out of the session data if there
+                # We want to keep session_metadata out of the session data if there
                 # is none. This is to ensure backward compatibility for older
                 # version of tk-core reading the authentication.yml
-                if user.get(_COOKIES):
-                    session_data[_COOKIES] = user[_COOKIES]
+                if user.get(_SESSION_METADATA):
+                    session_data[_SESSION_METADATA] = user[_SESSION_METADATA]
                 return session_data
         logger.debug("No cached user found for %s" % login)
     except Exception:
@@ -336,14 +336,14 @@ def get_session_data(base_url, login):
         return None
 
 
-def cache_session_data(host, login, session_token, cookies=None):
+def cache_session_data(host, login, session_token, session_metadata=None):
     """
     Caches the session data for a site and a user.
 
     :param host: Site we want to cache a session for.
     :param login: User we want to cache a session for.
     :param session_token: Session token we want to cache.
-    :param cookies: Session raw cookies.
+    :param session_metadata: Session meta data.
     """
     # Retrieve the cached info file location from the host
     file_path = _get_site_authentication_file_location(host)
@@ -354,7 +354,7 @@ def cache_session_data(host, login, session_token, cookies=None):
 
     document = _try_load_site_authentication_file(file_path)
 
-    if _insert_or_update_user(document, login, session_token, cookies):
+    if _insert_or_update_user(document, login, session_token, session_metadata):
         # Write back the file only it a new user was added.
         _write_yaml_file(file_path, document)
         logger.debug("Updated session cache data.")

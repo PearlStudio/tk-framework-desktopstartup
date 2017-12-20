@@ -20,8 +20,6 @@ at any point.
 """
 from __future__ import print_function
 
-import sys
-
 from . import session_cache
 from .. import LogManager
 from .errors import AuthenticationError, AuthenticationCancelled, ConsoleLoginWithSSONotSupportedError
@@ -49,7 +47,7 @@ class ConsoleAuthenticationHandlerBase(object):
         :param hostname: Host to renew a token for.
         :param login: User to renew a token for.
         :param http_proxy: Proxy to use for the request. Can be None.
-        :returns: The (hostname, login, session token, cookies) tuple.
+        :returns: The (hostname, login, session_token, session_metadata) tuple.
         :raises AuthenticationCancelled: If the user aborts the login process, this exception
                                          is raised.
 
@@ -63,20 +61,12 @@ class ConsoleAuthenticationHandlerBase(object):
                 # Insert a \n on the current line so the print is displayed on a new time.
                 print()
                 raise AuthenticationCancelled()
-            except ConsoleLoginWithSSONotSupportedError as e:
-                # SSO login requires a QtApplication environment at this time.
-                print("%s" % e)
-                print()
-                # @TODO: Temporary measure for the Beta program, until we settle
-                #        on a proper way to deal with authentication.
-                #        (c.f. discussion W JF Boismenu regarding Tank and DCCs)
-                sys.exit(-1)
 
             try:
                 try:
                     # Try to generate a session token and return the user info.
                     return hostname, login, session_cache.generate_session_token(
-                        hostname, login, password, http_proxy, None
+                        hostname, login, password, http_proxy
                     ), None
                 except MissingTwoFactorAuthenticationFault:
                     # session_token was None, we need 2fa.

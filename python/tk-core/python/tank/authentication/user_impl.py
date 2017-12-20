@@ -104,13 +104,13 @@ class ShotgunUserImpl(object):
         """
         self.__class__._not_implemented("get_login")
 
-    def get_cookies(self):
+    def get_session_metadata(self):
         """
-        Returns the cookies for this user.
+        Returns the session metadata for this user.
 
-        :returns: The raw cookies string.
+        :returns: An obscure blob of data.
         """
-        self.__class__._not_implemented("get_cookies")
+        self.__class__._not_implemented("get_session_metadata")
 
     def to_dict(self):
         """
@@ -163,7 +163,7 @@ class SessionUser(ShotgunUserImpl):
     A user that authenticates to the Shotgun server using a session token.
     """
 
-    def __init__(self, host, login, session_token, http_proxy, password=None, cookies=None):
+    def __init__(self, host, login, session_token, http_proxy, password=None, session_metadata=None):
         """
         Constructor.
 
@@ -173,7 +173,7 @@ class SessionUser(ShotgunUserImpl):
             the session token will be looked for in the users file.
         :param http_proxy: HTTP proxy to use with this host. Defaults to None.
         :param password: Password for the user. Defaults to None.
-        :param cookies: String of raw cookies for the user when using SSO. Defaults to None.
+        :param session_metadata: Data structure needed when SSO is used. This is an obscure blob of data. Defaults to None.
 
         :raises IncompleteCredentials: If there is not enough values
             provided to initialize the user, this exception will be thrown.
@@ -204,7 +204,7 @@ class SessionUser(ShotgunUserImpl):
 
         self._login = login
         self._session_token = session_token
-        self._cookies = cookies
+        self._session_metadata = session_metadata
 
         self._try_save()
 
@@ -246,21 +246,21 @@ class SessionUser(ShotgunUserImpl):
         if cache:
             self._try_save()
 
-    def get_cookies(self):
+    def get_session_metadata(self):
         """
-        Returns the raw cookies string for this user.
+        Returns the session_metadata string for this user.
 
-        :returns: The raw cookies string.
+        :returns: The session data, an obscure blob.
         """
-        return self._cookies
+        return self._session_metadata
 
-    def set_cookies(self, cookies):
+    def set_session_metadata(self, session_metadata):
         """
-        Update the user's cookies.
+        Update the user's session_metadata.
 
-        :param cookies: String of raw cookies for the user.
+        :param session_metadata: SSO session information.
         """
-        self._cookies = cookies
+        self._session_metadata = session_metadata
 
     def create_sg_connection(self):
         """
@@ -353,9 +353,9 @@ class SessionUser(ShotgunUserImpl):
         data["login"] = self.get_login()
         data["session_token"] = self.get_session_token()
         # To preserve backward compatibility with older cores, we avoid
-        # serializing the cookies if therer are not any.
-        if self.get_cookies() is not None:
-            data["cookies"] = self.get_cookies()
+        # serializing the session_metadata if there are not any.
+        if self.get_session_metadata() is not None:
+            data["session_metadata"] = self.get_session_metadata()
         return data
 
     def _try_save(self):
@@ -368,7 +368,7 @@ class SessionUser(ShotgunUserImpl):
                 self.get_host(),
                 self.get_login(),
                 self.get_session_token(),
-                self.get_cookies()
+                self.get_session_metadata()
             )
         except:
             # Do not break execution because somehow we couldn't
@@ -456,13 +456,13 @@ class ScriptUser(ShotgunUserImpl):
         # Script user has no login.
         return None
 
-    def get_cookies(self):
+    def get_session_metadata(self):
         """
-        Returns the raw cookies string for this user.
+        Returns the session_metadata for this user.
 
-        :returns: The String of cookies.
+        :returns: The metadata for the SSO session.
         """
-        # Script user has no cookies.
+        # Script user has no session_metadata.
         return None
 
     def to_dict(self):

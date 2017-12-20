@@ -91,7 +91,7 @@ class LoginDialog(QtGui.QDialog):
     # Formatting required to display error messages.
     ERROR_MSG_FORMAT = "<font style='color: rgb(252, 98, 70);'>%s</font>"
 
-    def __init__(self, is_session_renewal, hostname=None, login=None, fixed_host=False, http_proxy=None, parent=None, cookies=None):
+    def __init__(self, is_session_renewal, hostname=None, login=None, fixed_host=False, http_proxy=None, parent=None, session_metadata=None):
         """
         Constructs a dialog.
 
@@ -102,7 +102,7 @@ class LoginDialog(QtGui.QDialog):
         :param fixed_host: Indicates if the hostname can be changed. Defaults to False.
         :param http_proxy: The proxy server to use when testing authentication. Defaults to None.
         :param parent: The Qt parent for the dialog (defaults to None)
-        :param cookies: List of raw cookies. Defaults to empty list.
+        :param session_metadata: Metadata used in the context of SSO. This is an obscure blob of data.
         """
         QtGui.QDialog.__init__(self, parent)
 
@@ -122,7 +122,7 @@ class LoginDialog(QtGui.QDialog):
         login = login or ""
 
         self._is_session_renewal = is_session_renewal
-        self._cookies = cookies
+        self._session_metadata = session_metadata
         self._use_sso = False
 
         # Timer to update the GUI according to the URL, if SSO is supported or not.
@@ -165,7 +165,7 @@ class LoginDialog(QtGui.QDialog):
             self._set_login_message("Please enter your credentials.")
 
         # Set the focus appropriately on the topmost line edit that is empty.
-        if len(self.ui.site.text()) > 0:
+        if self.ui.site.text():
             if self.ui.login.text():
                 self.ui.password.setFocus(QtCore.Qt.OtherFocusReason)
             else:
@@ -313,12 +313,10 @@ class LoginDialog(QtGui.QDialog):
         :returns: A tuple of (hostname, username and session token) string if the user authenticated
                   None if the user cancelled.
         """
-        site = self._get_site()
-
-        if self._cookies and self._saml2_sso:
+        if self._session_metadata and self._saml2_sso:
             res = self._saml2_sso.on_sso_login_attempt({
-                "host": site,
-                "cookies": self._cookies,
+                "host": self._get_site(),
+                "cookies": self._session_metadata,
                 "product": PRODUCT_IDENTIFIER
             }, use_watchdog=True)
             # If the offscreen session renewal failed, show the GUI as a failsafe
@@ -330,9 +328,9 @@ class LoginDialog(QtGui.QDialog):
         res = self.exec_()
 
         if res == QtGui.QDialog.Accepted:
-            if self._cookies and self._saml2_sso:
+            if self._session_metadata and self._saml2_sso:
                 return self._saml2_sso.get_session_data()
-            return (site,
+            return (self._get_site(),
                     self.ui.login.text().encode("utf-8"),
                     self._new_session_token,
                     None)
@@ -409,12 +407,12 @@ class LoginDialog(QtGui.QDialog):
             if self._use_sso and self._saml2_sso:
                 res = self._saml2_sso.on_sso_login_attempt({
                     "host": site,
-                    "cookies": self._cookies,
+                    "cookies": self._session_metadata,
                     "product": PRODUCT_IDENTIFIER
                 })
                 if res == QtGui.QDialog.Accepted:
                     self._new_session_token = self._saml2_sso._session.session_id
-                    self._cookies = self._saml2_sso._session.cookies
+                    self._session_metadata = self._saml2_sso._session.cookies
                 else:
                     error_msg = self._saml2_sso.get_session_error()
                     if error_msg:

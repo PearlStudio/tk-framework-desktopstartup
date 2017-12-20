@@ -162,18 +162,17 @@ class ShotgunSamlUser(ShotgunUser):
 
     def get_claims_expiration(self):
         """
-        Obtain claims expiration for the user.
+        Obtains the claims expiration time for the user.
 
-        :returns: The expiration in seconds since January 1st 1970 UTC.
+        :returns: The claims expiration time, expressed as the number of seconds since epoch.
         """
-        return shotgun_shared.get_saml_claims_expiration(self._impl.get_cookies())
+        return shotgun_shared.get_saml_claims_expiration(self._impl.get_session_metadata())
 
     def _do_automatic_claims_renewal(self, preemtive_renewal_threshold=0.9):
         """
         Handles automatic renewal of the SAML2 claims for the user.
 
-        :params user: an already logged in user.
-        :params preemtive_renewal_threshold: How far into the claims duration we will attempt renewal.
+        :param preemtive_renewal_threshold: How far into the claims duration we will attempt renewal.
                                              Defaults to 90%, usually 3 minutes 45 seconds (90% of 5 mins).
         """
         logger.debug("Attempting automatic claims renewal")
@@ -253,8 +252,8 @@ def deserialize_user(payload):
     """
     impl = user_impl.deserialize_user(payload)
 
-    # We use the presence of cookies as an indicator that we are using SSO.
-    if isinstance(impl, user_impl.SessionUser) and impl.get_cookies() is not None:
+    # We use the presence of session_metadata as an indicator that we are using SSO.
+    if isinstance(impl, user_impl.SessionUser) and impl.get_session_metadata() is not None:
         return ShotgunSamlUser(impl)
     else:
         return ShotgunUser(impl)

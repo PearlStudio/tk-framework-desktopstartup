@@ -36,13 +36,15 @@ import threading
 import sys
 import os
 
+# When importing qt_abstraction, a lot of code is executed to detects which
+# version of Qt is being used. Running business logic at import time is not
+# something usually done by the Toolkit. The worry is that the import may fail
+# in the context of a DCC, but occur too early for the Toolkit logging to be
+# fully in place to record it.
 try:
-    from .ui.qt_abstraction import QtCore, QtGui, QtNetwork, QtWebKit
+    from .ui.qt_abstraction import QtGui
 except Exception:
-    QtCore = None
     QtGui = None
-    QtNetwork = None
-    QtWebKit = None
 
 logger = LogManager.get_logger(__name__)
 
@@ -110,7 +112,7 @@ class SessionRenewal(object):
         Prompts the user for the password. This method should never be called directly
         and _renew_session should be called instead.
 
-        In the case of an SSO session, the cookies will be used to attempt a
+        In the case of an SSO session, the session_metadata will be used to attempt a
         renewal without having to prompt the user. If this fails, then the
         user will be prompted for their credentials.
 
@@ -136,14 +138,14 @@ class SessionRenewal(object):
 
             # We're the first thread, so authenticate.
             try:
-                if user.get_cookies() is not None:
+                if user.get_session_metadata() is not None:
                     logger.debug("Attempting to renew our SSO session.")
                 else:
                     logger.debug("Not authenticated, requesting user input.")
 
                 # @TODO: Refactor the authenticate methods to return a struct-like
                 #        object instead of a 4 elements tuple.
-                hostname, login, session_token, cookies = credentials_handler.authenticate(
+                hostname, login, session_token, session_metadata = credentials_handler.authenticate(
                     user.get_host(),
                     user.get_login(),
                     user.get_http_proxy()
@@ -151,7 +153,7 @@ class SessionRenewal(object):
                 SessionRenewal._auth_state = SessionRenewal.SUCCESS
                 logger.debug("Renewal successful!")
                 user.set_session_token(session_token)
-                user.set_cookies(cookies)
+                user.set_session_metadata(session_metadata)
             except AuthenticationCancelled:
                 SessionRenewal._auth_state = SessionRenewal.CANCELLED
                 logger.debug("Renewal cancelled")
@@ -211,7 +213,7 @@ def renew_session(user):
     has_ui = _get_ui_state()
     # If we have a gui, we need gui based authentication
     if has_ui:
-        authenticator = UiAuthenticationHandler(is_session_renewal=True, cookies=user.get_cookies())
+        authenticator = UiAuthenticationHandler(is_session_renewal=True, session_metadata=user.get_session_metadata())
     else:
         authenticator = ConsoleRenewSessionHandler()
     SessionRenewal.renew_session(user, authenticator)
