@@ -216,12 +216,8 @@ def __import_shotgun_authentication_from_path(app_bootstrap):
     """
     logger.info("Initializing Shotgun Authenticator")
 
-    if "SGTK_CORE_DEBUG_LOCATION" in os.environ:
-        path = os.environ.get("SGTK_CORE_DEBUG_LOCATION")
-        logger.info("Using overridden SGTK_CORE_DEBUG_LOCATION: '%s'" % path)
-    else:
-        path = os.path.abspath(os.path.join(os.path.split(__file__)[0], "..", "tk-core"))
-        logger.info("Using built-in core located here: '%s'" % path)
+    path = os.path.abspath(os.path.join(os.path.split(__file__)[0], "..", "tk-core"))
+    logger.info("Using built-in core located here: '%s'" % path)
 
     # find where the install should be
     # try to load from a non-configured core, that's the default behaviour.
