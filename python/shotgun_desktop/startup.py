@@ -643,6 +643,8 @@ def __launch_app(app, splash, connection, app_bootstrap, server, settings):
             # Get back the pipeline configuration, this is expected to be initialized further down.
             _, pc = shotgun_desktop.paths.get_default_site_config_root(connection)
         except Exception:
+            import pdb
+            pdb.post_mortem()
             # Something went wrong. Wipe the default site config if we can and
             # rethrow
             if not config_folder_exists_at_startup:
