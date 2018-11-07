@@ -40,7 +40,10 @@ def get_pipeline_configuration_info(connection):
         raise RuntimeError("unknown platform: %s" % sys.platform)
 
     # interesting fields to return
-    fields = ["id", "code", "windows_path", "mac_path", "linux_path", "project", "sg_plugin_ids", "plugin_ids"]
+    fields = [
+        "id", "code", "windows_path", "mac_path", "linux_path", "project",
+        "sg_plugin_ids", "plugin_ids", "sg_descriptor", "descriptor"
+    ]
 
     # Find the right pipeline configuration. We'll always pick a projectless
     # one over one with the Template Project. To have a deterministic behaviour,
@@ -82,7 +85,15 @@ def get_pipeline_configuration_info(connection):
 
     # We don't filter in the Shotgun query for the plugin ids because not every site these fields yet.
     # So if any pipeline configurations with a plugin id was returned, filter them it out.
-    pcs = filter(lambda pc: not(pc.get("sg_plugin_ids") or pc.get("plugin_ids")), pcs)
+    # Also ignore those that have the sg_descriptor set as it is common to disable a descriptor
+    # based pipeline configuration by clearning the plugin id field.
+    pcs = filter(
+        lambda pc: not(
+            pc.get("sg_plugin_ids") or pc.get("plugin_ids") or
+            pc.get("sg_descriptor") or pc.get("descriptor")
+        ),
+        pcs
+    )
 
     logger.debug("These non-plugin_id based pipeline configurations were found by Desktop:")
     logger.debug(pprint.pformat(pcs))
