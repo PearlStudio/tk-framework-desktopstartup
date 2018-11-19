@@ -680,7 +680,10 @@ def main(**kwargs):
 
     from sgtk import authentication
     from sgtk.descriptor import InvalidAppStoreCredentialsError
-    from sgtk.authentication import ShotgunSamlUser
+    from sgtk.authentication import (
+        set_shotgun_authenticator_support_web_login,
+        ShotgunSamlUser,
+    )
 
     try:
         # Reading user settings from disk.
@@ -691,6 +694,8 @@ def main(**kwargs):
         # can't connect anymore, we need to be able to log the user out.
         shotgun_authenticator = sgtk.authentication.ShotgunAuthenticator()
 
+        logger.info("Enabling the Unified Login Flow.")
+        set_shotgun_authenticator_support_web_login(True)
         __optional_state_cleanup(splash, shotgun_authenticator, app_bootstrap)
 
         user = __do_login(
