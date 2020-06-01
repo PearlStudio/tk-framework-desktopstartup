@@ -28,7 +28,7 @@ from copy import deepcopy
 from . import constants, sgre as re
 
 # use api json to cover py 2.5
-from tank_vendor import shotgun_api3
+from tank_vendor import shotgun_api3, six
 
 json = shotgun_api3.shotgun.json
 
@@ -538,7 +538,7 @@ class MetricsDispatchWorkerThread(Thread):
             "auth_args": {"session_token": sg_connection.get_session_token()},
             "metrics": filtered_metrics_data,
         }
-        payload_json = json.dumps(payload)
+        payload_json = six.ensure_binary(json.dumps(payload))
 
         header = {"Content-Type": "application/json"}
         try:
@@ -619,6 +619,7 @@ class EventMetric(object):
         EVENT_NAME_FORMAT % (GROUP_TOOLKIT, "Opened Workfile"),
         EVENT_NAME_FORMAT % (GROUP_TOOLKIT, "Saved Workfile"),
         EVENT_NAME_FORMAT % (GROUP_TOOLKIT, "Executed websockets command"),
+        EVENT_NAME_FORMAT % (GROUP_TOOLKIT, "Render & Submit Version"),
     ]
 
     # Event property keys
