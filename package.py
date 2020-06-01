@@ -2,7 +2,7 @@
 
 name = 'tk_framework_desktopstartup'
 
-version = '1.10.5'
+version = '1.11.0'
 
 description = 'tk-framework-desktopstartup'
 
